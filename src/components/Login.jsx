@@ -1,8 +1,20 @@
 import React, { useRef, useState } from 'react';
 import Header from './Header';
 import { checkValidData } from '../utils/Validate';
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+} from 'firebase/auth';
+import { auth } from '../utils/firebase';
+import { useNavigate } from 'react-router-dom';
+import { updateProfile } from 'firebase/auth';
+import { useDispatch } from 'react-redux';
+import { addUser } from '../utils/userSlice';
 
 const Login = () => {
+  const navigate = useNavigate();
+  const dispatch = useDispatch();
+
   const [isSignInForm, setSignInForm] = useState(true);
   const [errorMessage, setErrorMessage] = useState(null);
 
@@ -13,18 +25,68 @@ const Login = () => {
   const handleButtonClick = () => {
     // Validate Form Data
     const message = checkValidData(email.current.value, password.current.value);
+    console.log(message);
     setErrorMessage(message);
+    if (message) return;
+    else navigate('/browse'); // This line is add to bypass auth checks
 
-    // Sign In/ Sign Up
+    if (!isSignInForm) {
+      // Sign Up logic
+      createUserWithEmailAndPassword(
+        auth,
+        email.current.value,
+        password.current.value
+      )
+        .then((userCredential) => {
+          const user = userCredential.user;
+
+          updateProfile(user, {
+            displayName: name.current.value,
+            photoURL: 'https://example.com/johndoe/photo.jpg',
+          })
+            .then(() => {
+              console.log('Profile updated!');
+              console.log(user);
+              const { uid, email, displayName, photoURL } = auth.currentUser;
+              dispatch(
+                addUser({
+                  uid: uid,
+                  email: email,
+                  displayName: displayName,
+                  photoURL: photoURL,
+                })
+              );
+              navigate('/browse');
+            })
+            .catch((error) => {
+              setErrorMessage(error.message);
+              console.error('Error updating profile:', error);
+            });
+        })
+        .catch((error) => {
+          const errorCode = error.code;
+          const errorMessage = error.message;
+          setErrorMessage(errorCode + ' - ' + errorMessage);
+        });
+    } else {
+      // Sign In logic
+      signInWithEmailAndPassword(auth, email, password)
+        .then((userCredential) => {
+          const user = userCredential.user;
+          console.log(user);
+          navigate('/browse');
+        })
+        .catch((error) => {
+          const errorCode = error.code;
+          const errorMessage = error.message;
+          setErrorMessage(errorCode + ' - ' + errorMessage);
+        });
+    }
   };
 
   const toggleSignInForm = () => {
     setSignInForm(!isSignInForm);
     setErrorMessage(null);
-
-    name.current.value = '';
-    email.current.value = '';
-    password.current.value = '';
   };
 
   return (
